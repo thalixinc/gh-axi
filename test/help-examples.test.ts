@@ -12,6 +12,7 @@ import { VARIABLE_FLAGS, VARIABLE_HELP } from "../src/commands/variable.js";
 import { SEARCH_FLAGS, SEARCH_HELP } from "../src/commands/search.js";
 import { API_HELP } from "../src/commands/api.js";
 import { GIST_HELP } from "../src/commands/gist.js";
+import { VERSION_HELP } from "../src/commands/version.js";
 import { TOP_HELP } from "../src/cli.js";
 
 /**
@@ -59,6 +60,7 @@ describe("Help output includes examples for every command family", () => {
   assertHelpHasExamples("SEARCH_HELP", SEARCH_HELP);
   assertHelpHasExamples("API_HELP", API_HELP);
   assertHelpHasExamples("GIST_HELP", GIST_HELP);
+  assertHelpHasExamples("VERSION_HELP", VERSION_HELP);
 });
 
 describe("--body-file discoverability", () => {

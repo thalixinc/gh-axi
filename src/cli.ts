@@ -16,6 +16,7 @@ import { searchCommand, SEARCH_HELP } from "./commands/search.js";
 import { apiCommand, API_HELP } from "./commands/api.js";
 import { gistCommand, GIST_HELP } from "./commands/gist.js";
 import { setupCommand, SETUP_HELP } from "./commands/setup.js";
+import { versionCommand, VERSION_HELP } from "./commands/version.js";
 import { stackCommand, STACK_HELP } from "./commands/stack.js";
 import { resolveHost, type HostContext } from "./host.js";
 import { VERSION } from "./version.js";
@@ -38,8 +39,8 @@ type MainOptions = {
 };
 
 export const TOP_HELP = `usage: gh-axi [command] [args] [flags]
-commands[16]:
-  (none)=dashboard, issue, pr, stack, run, workflow, release, repo, label, gist, project, secret, variable, search, api, setup
+commands[17]:
+  (none)=dashboard, issue, pr, stack, run, workflow, release, repo, label, gist, project, secret, variable, search, api, setup, version
 flags[4]:
   -R/--repo <OWNER/NAME> (after command), --hostname <host> (after command) or GH_HOST env, both flags accept space or equals form, --help, -v/-V/--version
 requires:
@@ -71,6 +72,7 @@ const COMMAND_HELP: Record<string, string> = {
   search: SEARCH_HELP,
   api: API_HELP,
   setup: SETUP_HELP,
+  version: VERSION_HELP,
   stack: STACK_HELP,
 };
 
@@ -97,6 +99,7 @@ const COMMANDS: Record<string, WrappedCommandFn> = {
   search: withRepoContext("search", searchCommand),
   api: withRepoContext("api", apiCommand),
   setup: setupCommand,
+  version: versionCommand,
   stack: withLocalRepoContext(stackCommand),
 };
 
