@@ -20,6 +20,8 @@ The SDK also appends a `"built-in":` section to the top-level `--help` output at
 ## Release process
 
 Releases are cut by release-please from conventional commit messages on `main`; merging the bot's release PR triggers `npm publish` via `.github/workflows/release-please.yml`.
+
+This fork (`thalixinc/gh-axi`) still carries the upstream release-please + npm-publish path (publishing `gh-axi` on npm). Publishing `@thalixinc/gh-axi` under our own scope requires re-pointing `release-please-manifest` + registry scope — parked as a separate ticket (cof), not in scope here.
 Do not hand-edit `CHANGELOG.md` or `.release-please-manifest.json` (a guard workflow blocks PRs that touch them), and regenerate `skills/gh-axi/SKILL.md` with `pnpm run build:skill` instead of editing it directly.
 
 Every `pull_request` workflow (`ci.yml`, `guard-generated-files.yml`, `no-mistakes-required.yml`) uses `paths-ignore` for the release-please output set (`.release-please-manifest.json`, `CHANGELOG.md`, `package.json`) so release PRs create zero runs. Job-level bot `if`s stay as defense in depth. `test/release-ci-exclusions.test.ts` derives that set from `release-please-config.json` and fails if a workflow drifts; update the ignore lists when adding `extra-files` or changing `release-type`.
@@ -114,6 +116,8 @@ Never expose an interactive path. Force `view --json`, `submit --auto`, and `mer
 `--attach <path[#alt]>` is repeatable on `issue`/`pr` `create`, `edit`, and `comment` (gh itself does not offer it on `pr review`). gh-axi checks the wrapped binary (`GH_BIN` or `gh` on PATH) is >= 2.99.0 before validation, then forwards values unchanged so gh owns parsing, validation, and upload behavior. Tests resolve that binary from `GH_BIN`, then a worktree `.tools/gh-2.99.0/**/bin/gh`, then PATH. Live upload tests also need `GH_AXI_TEST_REPO` set to a captain-owned test repo, never a product repo.
 
 ## Raising PRs to upstream
+
+**Scope: upstream (`kunchenguid/gh-axi`) only.** Intra-fork PRs targeting `thalixinc/gh-axi` carry no no-mistakes gate — they are raised plain and merged via cof-review. The no-mistakes ceremony below governs raising PRs to Kun Chen's upstream only.
 
 Human-authored PRs targeting `main` must be raised through [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) (`no-mistakes init --fork-url git@github.com:<you>/gh-axi.git`, then `git push no-mistakes`): the `Require no-mistakes` workflow fails any PR whose body lacks the pipeline's deterministic signature, and maintainer triage treats hand-raised PRs as blocked. Do not push a PR branch straight to `origin`. See CONTRIBUTING.md.
 
