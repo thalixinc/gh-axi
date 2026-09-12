@@ -88,3 +88,64 @@ fn dashboard_is_not_yet_ported() {
     assert_eq!(out.exit_code, 1);
     assert!(out.output.contains("NOT_PORTED"));
 }
+
+#[test]
+fn label_help_matches_spec() {
+    let out = run_with(&argv(&["label", "--help"]), no_releases);
+    assert_eq!(out.exit_code, 0);
+    assert_eq!(out.output, gh_axi::commands::label::LABEL_HELP);
+}
+
+#[test]
+fn label_bare_shows_help_with_newline() {
+    let out = run_with(&argv(&["label"]), no_releases);
+    assert_eq!(out.exit_code, 0);
+    assert_eq!(
+        out.output,
+        format!("{}\n", gh_axi::commands::label::LABEL_HELP)
+    );
+}
+
+#[test]
+fn label_unknown_subcommand_is_returned_error_exit_0() {
+    let out = run_with(&argv(&["label", "bogus"]), no_releases);
+    assert_eq!(out.exit_code, 0);
+    assert_eq!(
+        out.output,
+        "error: \"Unknown subcommand: bogus\"\ncode: VALIDATION_ERROR\nhelp[1]:\n  Available subcommands: list, create, edit, delete\n"
+    );
+}
+
+#[test]
+fn label_unknown_flag_is_validation_error() {
+    let out = run_with(&argv(&["label", "list", "--bogus"]), no_releases);
+    assert_eq!(out.exit_code, 2);
+    assert_eq!(
+        out.output,
+        "error: \"unknown flag for gh-axi label list: --bogus\"\ncode: VALIDATION_ERROR\nhelp[2]: \"gh-axi label list [flags]\",gh-axi label list --help\n"
+    );
+}
+
+#[test]
+fn label_create_requires_name() {
+    let out = run_with(&argv(&["label", "create"]), no_releases);
+    assert_eq!(out.exit_code, 2);
+    assert!(out.output.contains("--name is required"));
+}
+
+#[test]
+fn variable_unknown_subcommand_is_returned_error_exit_0() {
+    let out = run_with(&argv(&["variable", "bogus"]), no_releases);
+    assert_eq!(out.exit_code, 0);
+    assert_eq!(
+        out.output,
+        "error: \"Unknown subcommand: bogus\"\ncode: VALIDATION_ERROR\nhelp[1]:\n  Available subcommands: list, set, delete\n"
+    );
+}
+
+#[test]
+fn unported_verb_still_honest_after_label_ported() {
+    let out = run_with(&argv(&["pr"]), no_releases);
+    assert_eq!(out.exit_code, 1);
+    assert!(out.output.contains("NOT_PORTED"));
+}
