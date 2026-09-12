@@ -180,6 +180,7 @@ JSON responses are normally stripped of noisy fields before TOON encoding, but a
 | `api`      | Raw GitHub API access                                                       |
 | `setup`    | Install optional agent session hooks                                        |
 | `update`   | Built-in self-update command inherited from `axi-sdk-js`                    |
+| `version`  | Print the installed version and report an available update (`--yes` upgrades) |
 
 ### Global flags
 
