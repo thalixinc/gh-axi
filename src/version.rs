@@ -86,19 +86,19 @@ pub fn do_update(latest: &str) -> Result<()> {
 pub fn run_version(yes: bool, latest: Option<&str>, tty: bool) -> Result<String> {
     let version_line = format!("gh-axi {VERSION}");
     let Some(latest) = latest.filter(|v| update_available(v)) else {
-        return Ok(format!("{version_line}\n"));
+        return Ok(version_line);
     };
 
     if yes {
         do_update(latest)?;
         return Ok(format!(
-            "{version_line}\nupdate: gh-axi upgraded {VERSION} -> {latest}\n"
+            "{version_line}\nupdate: gh-axi upgraded {VERSION} -> {latest}"
         ));
     }
 
     if !tty {
         return Ok(format!(
-            "{version_line}\nupdate available: {latest} — run `gh-axi update`, or `gh-axi version --yes` to update now\n"
+            "{version_line}\nupdate available: {latest} — run `gh-axi update`, or `gh-axi version --yes` to update now"
         ));
     }
 
@@ -124,11 +124,11 @@ pub fn run_update(check: bool, latest: Option<&str>) -> Result<String> {
         None => {
             if check {
                 Ok(format!(
-                    "update:\n  package: gh-axi\n  current: {VERSION}\n  latest: (none published)\n  available: false\n"
+                    "update:\n  package: gh-axi\n  current: {VERSION}\n  latest: (none published)\n  available: false"
                 ))
             } else {
                 Ok(format!(
-                    "ok: gh-axi already at latest ({VERSION}) — no published release\n"
+                    "ok: gh-axi already at latest ({VERSION}) — no published release"
                 ))
             }
         }
@@ -136,13 +136,13 @@ pub fn run_update(check: bool, latest: Option<&str>) -> Result<String> {
             let available = semver_cmp(latest, VERSION) == Ordering::Greater;
             if check {
                 Ok(format!(
-                    "update:\n  package: gh-axi\n  current: {VERSION}\n  latest: {latest}\n  available: {available}\n"
+                    "update:\n  package: gh-axi\n  current: {VERSION}\n  latest: {latest}\n  available: {available}"
                 ))
             } else if !available {
-                Ok(format!("ok: gh-axi already at latest ({VERSION})\n"))
+                Ok(format!("ok: gh-axi already at latest ({VERSION})"))
             } else {
                 do_update(latest)?;
-                Ok(format!("update: gh-axi upgraded {VERSION} -> {latest}\n"))
+                Ok(format!("update: gh-axi upgraded {VERSION} -> {latest}"))
             }
         }
     }
@@ -188,11 +188,11 @@ mod tests {
     fn version_on_latest_or_no_release_is_just_the_line() {
         assert_eq!(
             run_version(false, None, false).unwrap(),
-            format!("gh-axi {VERSION}\n")
+            format!("gh-axi {VERSION}")
         );
         assert_eq!(
             run_version(false, Some("0.1.35"), false).unwrap(),
-            format!("gh-axi {VERSION}\n")
+            format!("gh-axi {VERSION}")
         );
     }
 
@@ -202,7 +202,7 @@ mod tests {
         assert_eq!(
             out,
             format!(
-                "gh-axi {VERSION}\nupdate available: 0.2.0 — run `gh-axi update`, or `gh-axi version --yes` to update now\n"
+                "gh-axi {VERSION}\nupdate available: 0.2.0 — run `gh-axi update`, or `gh-axi version --yes` to update now"
             )
         );
     }
@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(
             out,
             format!(
-                "update:\n  package: gh-axi\n  current: {VERSION}\n  latest: (none published)\n  available: false\n"
+                "update:\n  package: gh-axi\n  current: {VERSION}\n  latest: (none published)\n  available: false"
             )
         );
     }

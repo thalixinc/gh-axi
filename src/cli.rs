@@ -1,6 +1,10 @@
-//! Command-first dispatch, mirroring the Node CLI's `runAxiCli` surface.
+//! Command-first dispatch, mirroring the Node CLI's `runAxiCli` surface, with
+//! each verb's args parsed by clap.
 
+use crate::commands;
+use crate::context;
 use crate::error::{AxiError, Result};
+use crate::host::{HostContext, HostSource};
 use crate::toon;
 use crate::version;
 use std::io::IsTerminal;
@@ -123,15 +127,34 @@ where
 
     match command {
         "version" => version_outcome(args, fetch_latest),
+        "label" => verb_outcome(args, Verb::Label),
+        "variable" => verb_outcome(args, Verb::Variable),
         other => Outcome::err(not_ported(other)),
     }
+}
+
+#[derive(Clone, Copy)]
+enum Verb {
+    Label,
+    Variable,
 }
 
 fn command_help(command: &str) -> Option<&'static str> {
     match command {
         "version" => Some(VERSION_HELP),
+        "label" => Some(commands::label::LABEL_HELP),
+        "variable" => Some(commands::variable::VARIABLE_HELP),
         _ => None, // remaining verb help lands with each ported verb
     }
+}
+
+fn command_outcome(output: String) -> Outcome {
+    let out = if output.is_empty() {
+        output
+    } else {
+        format!("{output}\n")
+    };
+    Outcome::ok(out)
 }
 
 fn version_outcome<F>(args: &[String], fetch_latest: F) -> Outcome
@@ -142,7 +165,7 @@ where
     let latest = fetch_latest().unwrap_or(None);
     let tty = std::io::stdin().is_terminal();
     match version::run_version(yes, latest.as_deref(), tty) {
-        Ok(output) => Outcome::ok(output),
+        Ok(output) => command_outcome(output),
         Err(err) => Outcome::err(err),
     }
 }
@@ -157,10 +180,83 @@ where
     let check = args.iter().any(|a| a == "--check");
     match fetch_latest() {
         Ok(latest) => match version::run_update(check, latest.as_deref()) {
-            Ok(output) => Outcome::ok(output),
+            Ok(output) => command_outcome(output),
             Err(err) => Outcome::err(err),
         },
         Err(err) => Outcome::err(err),
+    }
+}
+
+fn verb_outcome(args: &[String], verb: Verb) -> Outcome {
+    let parsed = parse_repo_context_args(args);
+    if let Some(host) = &parsed.host_flag {
+        std::env::set_var("GH_HOST", host);
+    }
+    let host_ctx = parsed.host_flag.as_ref().map(|h| HostContext {
+        value: crate::host::resolve_host(Some(h)),
+        source: HostSource::Flag,
+    });
+    let ctx = context::resolve_repo(parsed.repo_flag.as_deref()).map(|mut c| {
+        if let Some(h) = &host_ctx {
+            c.host = Some(h.clone());
+        }
+        c
+    });
+
+    let result = match verb {
+        Verb::Label => commands::label::run(&parsed.stripped_args, ctx.as_ref()),
+        Verb::Variable => commands::variable::run(&parsed.stripped_args, ctx.as_ref()),
+    };
+    match result {
+        Ok(output) => command_outcome(output),
+        Err(err) => Outcome::err(err),
+    }
+}
+
+struct ParsedContext {
+    repo_flag: Option<String>,
+    host_flag: Option<String>,
+    stripped_args: Vec<String>,
+}
+
+/// Strip `-R`/`--repo`/`--hostname` context flags, mirroring `parseRepoContextArgs`.
+fn parse_repo_context_args(args: &[String]) -> ParsedContext {
+    let mut stripped = Vec::new();
+    let mut repo_flag = None;
+    let mut host_flag = None;
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+        if arg == "-R" && i + 1 < args.len() {
+            repo_flag = Some(args[i + 1].clone());
+            i += 1;
+        } else if let Some(v) = arg.strip_prefix("-R=") {
+            if !v.is_empty() {
+                repo_flag = Some(v.to_string());
+            }
+        } else if arg == "--repo" && i + 1 < args.len() {
+            repo_flag = Some(args[i + 1].clone());
+            i += 1;
+        } else if let Some(v) = arg.strip_prefix("--repo=") {
+            if !v.is_empty() {
+                repo_flag = Some(v.to_string());
+            }
+        } else if arg == "--hostname" && i + 1 < args.len() {
+            host_flag = Some(args[i + 1].clone());
+            i += 1;
+        } else if let Some(v) = arg.strip_prefix("--hostname=") {
+            if !v.is_empty() {
+                host_flag = Some(v.to_string());
+            }
+        } else {
+            stripped.push(arg.clone());
+        }
+        i += 1;
+    }
+    ParsedContext {
+        repo_flag,
+        host_flag,
+        stripped_args: stripped,
     }
 }
 

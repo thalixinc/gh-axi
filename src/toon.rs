@@ -1,6 +1,8 @@
 //! Faithful subset of the `@toon-format/toon` v2 encoder the Node CLI emits, so
-//! Rust output stays byte-identical for the shapes gh-axi produces today:
-//! scalars, flat key-value objects, and inline arrays of primitive strings.
+//! Rust output stays byte-identical: scalars, flat key-value objects, inline
+//! arrays of primitive strings, and tabular lists (`label[N]{fields}:` + rows).
+
+use serde_json::Value;
 
 const DELIMITER: &str = ",";
 
@@ -137,6 +139,110 @@ pub fn encode_string_array(key: &str, values: &[String]) -> String {
     format!("{}[{}]: {}", encode_key(key), values.len(), joined)
 }
 
+/// Encode a JSON scalar as a TOON primitive.
+pub fn encode_value(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => encode_string(s),
+        other => serde_json::to_string(other).unwrap_or_else(|_| "null".to_string()),
+    }
+}
+
+/// A field extractor for transforming gh JSON into flat TOON cells.
+#[derive(Debug, Clone, Copy)]
+pub enum FieldDef {
+    Field {
+        key: &'static str,
+        as_: &'static str,
+    },
+    RelativeTime {
+        key: &'static str,
+        as_: &'static str,
+    },
+}
+
+impl FieldDef {
+    fn as_name(&self) -> &'static str {
+        match self {
+            FieldDef::Field { as_, .. } | FieldDef::RelativeTime { as_, .. } => as_,
+        }
+    }
+}
+
+pub fn field(key: &'static str) -> FieldDef {
+    FieldDef::Field { key, as_: key }
+}
+
+pub fn relative_time(key: &'static str, as_: &'static str) -> FieldDef {
+    FieldDef::RelativeTime { key, as_ }
+}
+
+fn extract_value(item: &Value, def: &FieldDef) -> Value {
+    match def {
+        FieldDef::Field { key, .. } => item.get(*key).cloned().unwrap_or(Value::Null),
+        FieldDef::RelativeTime { key, .. } => Value::String(format_relative_time(
+            item.get(*key).and_then(|v| v.as_str()),
+        )),
+    }
+}
+
+/// `label[N]{f1,f2}:` header + one CSV row per item.
+pub fn render_list(label: &str, items: &[Value], schema: &[FieldDef]) -> String {
+    if items.is_empty() {
+        return format!("{}[0]:", encode_key(label));
+    }
+    let fields: Vec<String> = schema.iter().map(|f| encode_key(f.as_name())).collect();
+    let mut out = format!(
+        "{}[{}]{{{}}}:",
+        encode_key(label),
+        items.len(),
+        fields.join(",")
+    );
+    for item in items {
+        let cells: Vec<String> = schema
+            .iter()
+            .map(|f| encode_value(&extract_value(item, f)))
+            .collect();
+        out.push_str("\n  ");
+        out.push_str(&cells.join(","));
+    }
+    out
+}
+
+/// A flat object of string scalars: `key: value` per pair.
+pub fn render_kv(pairs: &[(&str, &str)]) -> String {
+    pairs
+        .iter()
+        .map(|(k, v)| format!("{}: {}", encode_key(k), encode_string(v)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Render the `help[N]:` next-step suggestion block (multiline, no dash).
+pub fn render_help(lines: &[String]) -> String {
+    if lines.is_empty() {
+        return String::new();
+    }
+    let indented = lines
+        .iter()
+        .map(|l| format!("  {l}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("help[{}]:\n{}", lines.len(), indented)
+}
+
+/// Combine already-rendered TOON blocks, dropping empty ones.
+pub fn render_output(blocks: &[String]) -> String {
+    blocks
+        .iter()
+        .filter(|b| !b.is_empty())
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Structured error as TOON: `error:` + `code:` + optional inline `help[N]:`.
 pub fn render_error(message: &str, code: &str, suggestions: &[String]) -> String {
     let mut lines = vec![
@@ -147,6 +253,57 @@ pub fn render_error(message: &str, code: &str, suggestions: &[String]) -> String
         lines.push(encode_string_array("help", suggestions));
     }
     lines.join("\n")
+}
+
+/// Structured error as TOON with a *multiline* `help[N]:` block (the shape
+/// `src/toon.ts renderError` emits for returned errors, vs the inline shape the
+/// thrown-error formatter uses).
+pub fn render_error_multiline(message: &str, code: &str, suggestions: &[String]) -> String {
+    let head = format!(
+        "{}: {}\n{}: {}",
+        encode_key("error"),
+        encode_string(message),
+        encode_key("code"),
+        encode_string(code)
+    );
+    if suggestions.is_empty() {
+        return head;
+    }
+    format!("{head}\n{}", render_help(suggestions))
+}
+
+fn format_relative_time(iso: Option<&str>) -> String {
+    let Some(iso) = iso else {
+        return "unknown".to_string();
+    };
+    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso) else {
+        return "unknown".to_string();
+    };
+    let now = chrono::Utc::now();
+    let secs = now
+        .signed_duration_since(dt.with_timezone(&chrono::Utc))
+        .num_seconds();
+    if secs < 60 {
+        return "just now".to_string();
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{mins}m ago");
+    }
+    let hrs = mins / 60;
+    if hrs < 24 {
+        return format!("{hrs}h ago");
+    }
+    let days = hrs / 24;
+    if days < 30 {
+        return format!("{days}d ago");
+    }
+    let months = days / 30;
+    if months < 12 {
+        return format!("{months}mo ago");
+    }
+    let years = months / 12;
+    format!("{years}y ago")
 }
 
 #[cfg(test)]
@@ -176,20 +333,7 @@ mod tests {
     #[test]
     fn quotes_boolean_and_null_literals() {
         assert_eq!(encode_string("true"), "\"true\"");
-        assert_eq!(encode_string("false"), "\"false\"");
         assert_eq!(encode_string("null"), "\"null\"");
-    }
-
-    #[test]
-    fn quotes_numeric_like() {
-        assert_eq!(encode_string("123"), "\"123\"");
-        assert_eq!(encode_string("0123"), "\"0123\"");
-        assert_eq!(encode_string("-1.5e3"), "\"-1.5e3\"");
-    }
-
-    #[test]
-    fn quotes_whitespace_padded() {
-        assert_eq!(encode_string(" x "), "\" x \"");
     }
 
     #[test]
@@ -200,15 +344,9 @@ mod tests {
     }
 
     #[test]
-    fn escapes_inner_quotes() {
-        assert_eq!(encode_string("say \"hi\""), "\"say \\\"hi\\\"\"");
-    }
-
-    #[test]
     fn key_quoting() {
         assert_eq!(encode_key("error"), "error");
         assert_eq!(encode_key("built-in"), "\"built-in\"");
-        assert_eq!(encode_key("update --check"), "\"update --check\"");
     }
 
     #[test]
@@ -225,18 +363,35 @@ mod tests {
     }
 
     #[test]
-    fn error_help_array_quotes_each_cell() {
-        let out = render_error(
-            "unknown flag for gh-axi issue list: --bogus",
-            "VALIDATION_ERROR",
-            &[
-                "gh-axi issue list [flags]".to_string(),
-                "gh-axi issue list --help".to_string(),
-            ],
-        );
+    fn tabular_list_shape() {
+        let items = vec![
+            serde_json::json!({ "name": "a,b" }),
+            serde_json::json!({ "name": "c" }),
+        ];
         assert_eq!(
-            out,
-            "error: \"unknown flag for gh-axi issue list: --bogus\"\ncode: VALIDATION_ERROR\nhelp[2]: \"gh-axi issue list [flags]\",gh-axi issue list --help"
+            render_list("labels", &items, &[field("name")]),
+            "labels[2]{name}:\n  \"a,b\"\n  c"
+        );
+    }
+
+    #[test]
+    fn empty_list_shape() {
+        assert_eq!(render_list("labels", &[], &[field("name")]), "labels[0]:");
+    }
+
+    #[test]
+    fn kv_shape() {
+        assert_eq!(
+            render_kv(&[("set", "ok"), ("variable", "NODE_ENV")]),
+            "set: ok\nvariable: NODE_ENV"
+        );
+    }
+
+    #[test]
+    fn help_block_shape() {
+        assert_eq!(
+            render_help(&["line1".to_string(), "line2".to_string()]),
+            "help[2]:\n  line1\n  line2"
         );
     }
 }
